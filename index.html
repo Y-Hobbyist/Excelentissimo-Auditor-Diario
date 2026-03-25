@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-width=1.0">
+    <title>Auditor de Textos Legais</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            position: relative;
+            transition: background-color 0.3s;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            font-size: 24px;
+            margin-top: 10px;
+        }
+        p.subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: 1fr; }
+        }
+        label {
+            font-weight: bold;
+            margin-top: 10px;
+            display: block;
+            color: #34495e;
+        }
+        textarea {
+            width: 100%;
+            height: 250px;
+            margin-top: 5px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            resize: vertical;
+            box-sizing: border-box;
+            background-color: #fff;
+            color: #333;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .button-group {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+            margin-bottom: 20px;
+            gap: 15px;
+        }
+        button {
+            padding: 12px 25px;
+            font-size: 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: opacity 0.3s;
+            font-weight: bold;
+        }
+        button:hover { opacity: 0.9; }
+        .btn-analyze { background-color: #f39c12; color: white; width: 200px; }
+        .btn-clear { background-color: #e74c3c; color: white; width: 150px; }
+        
+        .btn-theme {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        /* Área de Resultados */
+        #resultado {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            background-color: #e8f8f5;
+            border: 1px solid #1abc9c;
+            display: none;
+        }
+        .error-card {
+            background: #fff;
+            border-left: 5px solid #e74c3c;
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            color: #333; /* Força cor escura mesmo no tema claro */
+        }
+        .highlight-missing {
+            background-color: #ffcccc;
+            color: #c0392b;
+            text-decoration: line-through;
+            padding: 0 3px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+
+        /* TEMA ESCURO */
+        body.dark-mode { background-color: #121212; color: #e0e0e0; }
+        body.dark-mode .container { background: #1e1e1e; box-shadow: 0 4px 8px rgba(0,0,0,0.5); }
+        body.dark-mode h1 { color: #ffffff; }
+        body.dark-mode p.subtitle, body.dark-mode label { color: #b0bec5; }
+        body.dark-mode textarea { background-color: #2c2c2c; color: #e0e0e0; border: 1px solid #555; }
+        body.dark-mode #resultado { background-color: #1a2a2a; border-color: #333; }
+        body.dark-mode .error-card { background-color: #2c2c2c; border-left-color: #ff5252; color: #e0e0e0; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <button class="btn-theme" id="themeToggle" onclick="alternarTema()" title="Alternar Tema Escuro">🌙</button>
+
+    <h1>🔎 Auditor de Textos Legais</h1>
+    <p class="subtitle">Compare o texto original do PDF com a versão formatada manualmente para detectar supressões acidentais.</p>
+
+    <div class="grid">
+        <div>
+            <label for="txtOriginal">1. Texto Original (PDF bruto):</label>
+            <textarea id="txtOriginal" placeholder="Cole aqui o texto diretamente do PDF..."></textarea>
+        </div>
+        <div>
+            <label for="txtFormatado">2. Texto Formatado (Tratado):</label>
+            <textarea id="txtFormatado" placeholder="Cole aqui o texto que foi formatado manualmente..."></textarea>
+        </div>
+    </div>
+
+    <div class="button-group">
+        <button class="btn-clear" onclick="limparTextos()">Limpar Tudo</button>
+        <button class="btn-analyze" onclick="auditarTextos()">Analisar e Comparar</button>
+    </div>
+
+    <div id="resultado"></div>
+</div>
+
+<script>
+    // Carrega a preferência de tema escura igual ao software anterior
+    document.addEventListener('DOMContentLoaded', () => {
+        const temaSalvo = localStorage.getItem('temaEscuro');
+        if (temaSalvo === 'ativo') {
+            document.body.classList.add('dark-mode');
+            document.getElementById('themeToggle').textContent = '☀️';
+        }
+    });
+
+    function alternarTema() {
+        document.body.classList.toggle('dark-mode');
+        let btn = document.getElementById('themeToggle');
+        if (document.body.classList.contains('dark-mode')) {
+            btn.textContent = '☀️';
+            localStorage.setItem('temaEscuro', 'ativo');
+        } else {
+            btn.textContent = '🌙';
+            localStorage.setItem('temaEscuro', 'inativo');
+        }
+    }
+
+    function limparTextos() {
+        document.getElementById('txtOriginal').value = '';
+        document.getElementById('txtFormatado').value = '';
+        document.getElementById('resultado').style.display = 'none';
+    }
+
+    function auditarTextos() {
+        let original = document.getElementById('txtOriginal').value;
+        let formatado = document.getElementById('txtFormatado').value;
+        let divRes = document.getElementById('resultado');
+
+        if (!original.trim() || !formatado.trim()) {
+            alert("Por favor, preencha ambas as caixas de texto para realizar a comparação.");
+            return;
+        }
+
+        // Normalização: Troca qualquer quebra de linha ou espaços repetidos por 1 único espaço
+        let t1 = original.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+        let t2 = formatado.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+        divRes.style.display = 'block';
+
+        if (t1 === t2) {
+            divRes.innerHTML = '<h3 style="color: #27ae60; margin: 0;">✅ Verificação Concluída: Os textos são idênticos!</h3><p>Nenhuma letra, palavra ou pontuação foi suprimida.</p>';
+            return;
+        }
+
+        // Algoritmo de Busca de Divergências
+        let erros = [];
+        let i = 0, j = 0;
+
+        while (i < t1.length && j < t2.length) {
+            if (t1[i] === t2[j]) {
+                i++; j++;
+            } else {
+                // Se diferiu, tentamos encontrar onde o texto formatado (t2) "alcança" o original (t1) novamente
+                // Pegamos os próximos 12 caracteres do texto formatado para usar como "âncora"
+                let ancora = t2.substr(j, 12); 
+                
+                if (ancora.length < 5) { // Chegamos no final do texto
+                    erros.push({ pos: i, suprimido: t1.substring(i) });
+                    break;
+                }
+
+                let syncIndex = t1.indexOf(ancora, i);
+                
+                if (syncIndex !== -1) {
+                    // Significa que algo foi pulado/apagado no texto formatado
+                    let suprimido = t1.substring(i, syncIndex);
+                    erros.push({ pos: i, suprimido: suprimido });
+                    i = syncIndex; // Pula o 'i' para onde eles voltaram a ser iguais
+                } else {
+                    // Se não encontrou a âncora, pode ser que algo foi INSERIDO no formatado por engano.
+                    // Avançamos o 'j' para tentar ressincronizar (evita travamentos)
+                    let ancoraOriginal = t1.substr(i, 12);
+                    let syncIndexT2 = t2.indexOf(ancoraOriginal, j);
+                    
+                    if (syncIndexT2 !== -1) {
+                        j = syncIndexT2; // Ignora o que foi inserido e continua
+                    } else {
+                        // Desincronização total, força avanço
+                        erros.push({ pos: i, suprimido: "Erro complexo de leitura a partir deste ponto." });
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Se sobrou texto original que não foi lido, ele foi apagado no final
+        if (i < t1.length && j === t2.length) {
+            erros.push({ pos: i, suprimido: t1.substring(i) });
+        }
+
+        renderizarErros(t1, t2, erros, divRes);
+    }
+
+    function renderizarErros(t1, t2, erros, divRes) {
+        let html = `<h3 style="color: #e74c3c; margin-top: 0;">❌ Divergências Encontradas</h3>`;
+        html += `<p><strong>Caracteres (Original):</strong> ${t1.length} | <strong>Caracteres (Formatado):</strong> ${t2.length}</p>`;
+
+        // Regex para capturar a localização (Artigos, Incisos, Parágrafos, Alíneas e Penas)
+        const regexMarcadores = /(?:^|\s)(Art\.\s*\d+[a-z]*|§\s*\d+(?:º|°|o)?|Parágrafo\s+único|[IVXLCDM]+\s*-|[a-z]\)|Pena(?:s)?\s*[-:])/gi;
+
+        erros.forEach((err, index) => {
+            // Localiza o contexto buscando para trás a partir do erro
+            let contextoLocal = "Antes do primeiro artigo";
+            let textoAteErro = t1.substring(0, err.pos);
+            
+            let matches = [...textoAteErro.matchAll(regexMarcadores)];
+            if (matches.length > 0) {
+                contextoLocal = matches[matches.length - 1][1]; // Pega o último marcador encontrado
+            }
+
+            // Cria um "snippet" (um pedaço do texto antes e depois) para mostrar ao usuário onde está o erro
+            let inicioSnippet = Math.max(0, err.pos - 40);
+            let fimSnippet = Math.min(t1.length, err.pos + err.suprimido.length + 40);
+            
+            let trechoAntes = t1.substring(inicioSnippet, err.pos);
+            let trechoDepois = t1.substring(err.pos + err.suprimido.length, fimSnippet);
+
+            html += `
+                <div class="error-card">
+                    <p style="margin: 0 0 5px 0;"><strong>Localização:</strong> <span style="color: #e67e22;">${contextoLocal}</span></p>
+                    <p style="margin: 0 0 10px 0;"><strong>Suprimido:</strong> "${err.suprimido}"</p>
+                    <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-style: italic; color: #555;">
+                        "...${trechoAntes}<span class="highlight-missing">${err.suprimido}</span>${trechoDepois}..."
+                    </div>
+                </div>
+            `;
+        });
+
+        divRes.innerHTML = html;
+    }
+</script>
+
+</body>
+</html>
