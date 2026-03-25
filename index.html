@@ -108,17 +108,32 @@
         }
         .error-card {
             background: #fff;
-            border-left: 5px solid #e74c3c;
             padding: 10px 15px;
             margin-bottom: 15px;
             border-radius: 4px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             color: #333; 
         }
+        
+        /* Estilos baseados no tipo de erro (🔴 Todos Vermelhos agora) */
+        .card-supressao { border-left: 5px solid #e74c3c; } /* Vermelho escuro */
+        .card-insercao { border-left: 5px solid #ff4444; } /* Vermelho mais vivo */
+        .card-dessinc { border-left: 5px solid #f39c12; }
+
+        /* Estilo para Supressão: Vermelho, Riscado */
         .highlight-missing {
             background-color: #ffcccc;
             color: #c0392b;
             text-decoration: line-through;
+            padding: 0 3px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        /* Estilo para Inserção: Vermelho, Sublinhado */
+        .highlight-added {
+            background-color: #ffebee; /* Fundo rosa bem claro */
+            color: #d32f2f; /* Texto vermelho */
+            text-decoration: underline; /* Sublinhado */
             padding: 0 3px;
             border-radius: 3px;
             font-weight: bold;
@@ -131,7 +146,14 @@
         body.dark-mode p.subtitle, body.dark-mode label { color: #b0bec5; }
         body.dark-mode textarea { background-color: #2c2c2c; color: #e0e0e0; border: 1px solid #555; }
         body.dark-mode #resultado { background-color: #1a2a2a; border-color: #333; }
-        body.dark-mode .error-card { background-color: #2c2c2c; border-left-color: #ff5252; color: #e0e0e0; }
+        body.dark-mode .error-card { background-color: #2c2c2c; color: #e0e0e0; }
+        
+        /* Ajuste das bordas e destaques no tema escuro para ficarem visíveis */
+        body.dark-mode .card-supressao { border-left-color: #ff5252; }
+        body.dark-mode .card-insercao { border-left-color: #ff8a80; }
+        
+        body.dark-mode .highlight-missing { background-color: #5c1919; color: #ffab91; }
+        body.dark-mode .highlight-added { background-color: #421414; color: #ff8a80; }
     </style>
 </head>
 <body>
@@ -140,7 +162,7 @@
     <button class="btn-theme" id="themeToggle" onclick="alternarTema()" title="Alternar Tema Escuro">🌙</button>
 
     <h1>🔎 Auditor de Textos Legais</h1>
-    <p class="subtitle">Compare o texto original do PDF com a versão formatada para detectar supressões.</p>
+    <p class="subtitle">Compare o texto original do PDF com a versão formatada para detectar supressões ou inserções indevidas.</p>
 
     <div class="grid">
         <div>
@@ -149,7 +171,7 @@
         </div>
         <div>
             <label for="txtFormatado">2. Texto Formatado (Tratado):</label>
-            <textarea id="txtFormatado" placeholder="Cole aqui o texto que foi formatado manualmente..."></textarea>
+            <textarea id="txtFormatado" placeholder="Cole aqui o texto que foi formatado..."></textarea>
         </div>
     </div>
 
@@ -204,7 +226,7 @@
         divRes.style.display = 'block';
 
         if (t1 === t2) {
-            divRes.innerHTML = '<h3 style="color: #27ae60; margin: 0;">✅ Verificação Concluída: Os textos são idênticos!</h3><p>Nenhuma letra, palavra ou pontuação foi suprimida.</p>';
+            divRes.innerHTML = '<h3 style="color: #27ae60; margin: 0;">✅ Verificação Concluída: Os textos são idênticos!</h3><p>Nenhuma letra foi suprimida ou adicionada.</p>';
             return;
         }
 
@@ -215,38 +237,48 @@
             if (t1[i] === t2[j]) {
                 i++; j++;
             } else {
-                let ancora = t2.substr(j, 12); 
-                if (ancora.length < 5) { 
-                    erros.push({ pos: i, suprimido: t1.substring(i) });
+                let ancoraT2 = t2.substr(j, 15); 
+                let ancoraT1 = t1.substr(i, 15);
+
+                if (ancoraT2.length < 5 || ancoraT1.length < 5) { 
+                    if (i < t1.length) erros.push({ tipo: 'supressao', pos: i, texto: t1.substring(i) });
+                    if (j < t2.length) erros.push({ tipo: 'insercao', pos: i, texto: t2.substring(j) });
                     break;
                 }
 
-                let syncIndex = t1.indexOf(ancora, i);
-                if (syncIndex !== -1) {
-                    let suprimido = t1.substring(i, syncIndex);
-                    erros.push({ pos: i, suprimido: suprimido });
-                    i = syncIndex; 
-                } else {
-                    let ancoraOriginal = t1.substr(i, 12);
-                    let syncIndexT2 = t2.indexOf(ancoraOriginal, j);
-                    if (syncIndexT2 !== -1) {
-                        j = syncIndexT2; 
+                let jumpT1 = t1.indexOf(ancoraT2, i);
+                let jumpT2 = t2.indexOf(ancoraT1, j);
+
+                if (jumpT1 !== -1 && jumpT2 !== -1) {
+                    if ((jumpT1 - i) <= (jumpT2 - j)) {
+                        erros.push({ tipo: 'supressao', pos: i, texto: t1.substring(i, jumpT1) });
+                        i = jumpT1;
                     } else {
-                        erros.push({ pos: i, suprimido: "Erro complexo de dessincronização." });
-                        break;
+                        erros.push({ tipo: 'insercao', pos: i, texto: t2.substring(j, jumpT2) });
+                        j = jumpT2;
                     }
+                } else if (jumpT1 !== -1) {
+                    erros.push({ tipo: 'supressao', pos: i, texto: t1.substring(i, jumpT1) });
+                    i = jumpT1;
+                } else if (jumpT2 !== -1) {
+                    erros.push({ tipo: 'insercao', pos: i, texto: t2.substring(j, jumpT2) });
+                    j = jumpT2;
+                } else {
+                    erros.push({ tipo: 'dessinc', pos: i, texto: "Erro complexo: Os textos divergiram totalmente a partir deste ponto." });
+                    break;
                 }
             }
         }
 
-        if (i < t1.length && j === t2.length) {
-            erros.push({ pos: i, suprimido: t1.substring(i) });
+        if (i < t1.length && j >= t2.length) {
+            erros.push({ tipo: 'supressao', pos: i, texto: t1.substring(i) });
+        } else if (j < t2.length && i >= t1.length) {
+            erros.push({ tipo: 'insercao', pos: i, texto: t2.substring(j) });
         }
 
         renderizarErros(t1, t2, erros, divRes);
     }
 
-    // === NOVA FUNÇÃO DO GPS JURÍDICO ===
     function obterContextoHierarquico(textoAteErro) {
         const regex = /(?:^|\s)(Art\.\s*\d+[a-z]*|§\s*\d+(?:º|°|o)?|Parágrafo\s+único|[IVXLCDM]+\s*-|[a-z]\)|Pena(?:s)?\s*[-:])/gi;
         
@@ -256,7 +288,6 @@
         let currentAli = "";
         let currentPena = "";
 
-        // Palavras que indicam que o marcador é apenas uma citação/remissão no meio da frase
         const stopWords = ['do', 'da', 'dos', 'das', 'no', 'na', 'nos', 'nas', 'ao', 'aos', 'à', 'às', 'o', 'os', 'a', 'as', 'e', 'ou', 'art', 'arts', 'lei', 'inciso', 'incisos', 'alínea', 'alíneas', 'caput', 'sob', 'conforme', 'termos', 'parágrafo', 'parágrafos', 'em'];
 
         let match;
@@ -264,56 +295,41 @@
             let marker = match[1].trim();
             let markerIndex = match.index;
 
-            // Extrai as 25 letras ANTES do marcador para análise de contexto
             let startIndex = Math.max(0, markerIndex - 25);
             let contextBefore = textoAteErro.substring(startIndex, markerIndex).toLowerCase().trim();
-
             let isCrossReference = false;
             
-            // Se o contexto imediatamente anterior termina com vírgula, é citação (ex: art. 11, § 1º)
             if (contextBefore.endsWith(',')) {
                 isCrossReference = true;
             } else {
-                // Pega a última palavra solta antes do marcador
                 let tokens = contextBefore.split(/\s+/);
                 let lastWord = tokens[tokens.length - 1];
-                let lastWordClean = lastWord ? lastWord.replace(/[.,;:]/g, '') : ''; // Limpa pontuações
-                
-                // Verifica se a palavra está na lista de proibições
-                if (stopWords.includes(lastWordClean)) {
-                    isCrossReference = true;
-                }
+                let lastWordClean = lastWord ? lastWord.replace(/[.,;:]/g, '') : '';
+                if (stopWords.includes(lastWordClean)) isCrossReference = true;
             }
 
-            // Ignora o marcador e vai para o próximo se for citação
             if (isCrossReference) continue;
 
-            // --- Lógica de Hierarquia (Matrioska) ---
             let upperMarker = marker.toUpperCase();
-            
-            // Padroniza a primeira letra maiúscula para a exibição ficar bonita
             marker = marker.charAt(0).toUpperCase() + marker.slice(1);
 
             if (upperMarker.startsWith("ART")) {
                 currentArt = marker;
-                // Ao entrar num novo Artigo, zera tudo que vem abaixo dele
                 currentPar = currentInc = currentAli = currentPena = "";
             } else if (upperMarker.startsWith("§") || upperMarker.startsWith("PARÁGRAFO")) {
                 currentPar = marker;
-                // Ao entrar num novo Parágrafo, zera incisos e alíneas
                 currentInc = currentAli = currentPena = "";
             } else if (upperMarker.startsWith("PENA")) {
                 currentPena = marker;
                 currentInc = currentAli = "";
-            } else if (/^[A-Z]\)$/i.test(marker)) { // Letra com parêntese
+            } else if (/^[A-Z]\)$/i.test(marker)) { 
                 currentAli = marker;
-            } else if (/^[IVXLCDM]+\s*-/i.test(marker)) { // Algarismo Romano com Hífen
+            } else if (/^[IVXLCDM]+\s*-/i.test(marker)) { 
                 currentInc = marker;
                 currentAli = "";
             }
         }
 
-        // Constrói o caminho ("Migalha de pão")
         let breadcrumb = [];
         if (currentArt) breadcrumb.push(currentArt);
         if (currentPar) breadcrumb.push(currentPar);
@@ -321,10 +337,7 @@
         if (currentInc) breadcrumb.push(currentInc);
         if (currentAli) breadcrumb.push(currentAli);
 
-        if (breadcrumb.length === 0) {
-            return "Antes do primeiro artigo (Preâmbulo)";
-        }
-        
+        if (breadcrumb.length === 0) return "Antes do primeiro artigo (Preâmbulo)";
         return breadcrumb.join(" <span style='color:#bdc3c7'>🡒</span> ");
     }
 
@@ -334,22 +347,37 @@
 
         erros.forEach((err) => {
             let textoAteErro = t1.substring(0, err.pos);
-            
-            // CHAMA O NOVO GPS JURÍDICO
             let contextoLocal = obterContextoHierarquico(textoAteErro);
 
             let inicioSnippet = Math.max(0, err.pos - 40);
-            let fimSnippet = Math.min(t1.length, err.pos + err.suprimido.length + 40);
+            let fimSnippet = Math.min(t1.length, err.pos + (err.tipo === 'supressao' ? err.texto.length : 0) + 40);
             
             let trechoAntes = t1.substring(inicioSnippet, err.pos);
-            let trechoDepois = t1.substring(err.pos + err.suprimido.length, fimSnippet);
+            let trechoDepois = t1.substring(err.pos + (err.tipo === 'supressao' ? err.texto.length : 0), fimSnippet);
+
+            let classeCard, tituloProblema, destaqueHTML;
+            
+            if (err.tipo === 'supressao') {
+                classeCard = 'card-supressao';
+                tituloProblema = 'Supressão (Apagado)';
+                destaqueHTML = `<span class="highlight-missing">${err.texto}</span>`;
+            } else if (err.tipo === 'insercao') {
+                classeCard = 'card-insercao';
+                tituloProblema = 'Inserção (Adicionado a mais)';
+                // Usa a classe .highlight-added (que agora é vermelha e sublinhada)
+                destaqueHTML = `<span class="highlight-added">${err.texto}</span>`;
+            } else {
+                classeCard = 'card-dessinc';
+                tituloProblema = 'Aviso de Dessincronização';
+                destaqueHTML = `<span style="background: yellow; color: black; font-weight: bold;">[${err.texto}]</span>`;
+            }
 
             html += `
-                <div class="error-card">
+                <div class="error-card ${classeCard}">
                     <p style="margin: 0 0 5px 0;"><strong>Localização:</strong> <span style="color: #e67e22; font-weight: bold;">${contextoLocal}</span></p>
-                    <p style="margin: 0 0 10px 0;"><strong>Suprimido:</strong> "${err.suprimido}"</p>
+                    <p style="margin: 0 0 10px 0;"><strong>${tituloProblema}:</strong> "${err.texto}"</p>
                     <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-style: italic; color: #555;">
-                        "...${trechoAntes}<span class="highlight-missing">${err.suprimido}</span>${trechoDepois}..."
+                        "...${trechoAntes}${destaqueHTML}${trechoDepois}..."
                     </div>
                 </div>
             `;
