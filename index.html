@@ -98,7 +98,6 @@
             padding: 0;
         }
 
-        /* Área de Resultados */
         #resultado {
             margin-top: 20px;
             padding: 15px;
@@ -114,7 +113,7 @@
             margin-bottom: 15px;
             border-radius: 4px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            color: #333; /* Força cor escura mesmo no tema claro */
+            color: #333; 
         }
         .highlight-missing {
             background-color: #ffcccc;
@@ -141,7 +140,7 @@
     <button class="btn-theme" id="themeToggle" onclick="alternarTema()" title="Alternar Tema Escuro">🌙</button>
 
     <h1>🔎 Auditor de Textos Legais</h1>
-    <p class="subtitle">Compare o texto original do PDF com a versão formatada manualmente para detectar supressões acidentais.</p>
+    <p class="subtitle">Compare o texto original do PDF com a versão formatada para detectar supressões.</p>
 
     <div class="grid">
         <div>
@@ -163,7 +162,6 @@
 </div>
 
 <script>
-    // Carrega a preferência de tema escura igual ao software anterior
     document.addEventListener('DOMContentLoaded', () => {
         const temaSalvo = localStorage.getItem('temaEscuro');
         if (temaSalvo === 'ativo') {
@@ -196,11 +194,10 @@
         let divRes = document.getElementById('resultado');
 
         if (!original.trim() || !formatado.trim()) {
-            alert("Por favor, preencha ambas as caixas de texto para realizar a comparação.");
+            alert("Por favor, preencha ambas as caixas de texto.");
             return;
         }
 
-        // Normalização: Troca qualquer quebra de linha ou espaços repetidos por 1 único espaço
         let t1 = original.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
         let t2 = formatado.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
 
@@ -211,7 +208,6 @@
             return;
         }
 
-        // Algoritmo de Busca de Divergências
         let erros = [];
         let i = 0, j = 0;
 
@@ -219,40 +215,30 @@
             if (t1[i] === t2[j]) {
                 i++; j++;
             } else {
-                // Se diferiu, tentamos encontrar onde o texto formatado (t2) "alcança" o original (t1) novamente
-                // Pegamos os próximos 12 caracteres do texto formatado para usar como "âncora"
                 let ancora = t2.substr(j, 12); 
-                
-                if (ancora.length < 5) { // Chegamos no final do texto
+                if (ancora.length < 5) { 
                     erros.push({ pos: i, suprimido: t1.substring(i) });
                     break;
                 }
 
                 let syncIndex = t1.indexOf(ancora, i);
-                
                 if (syncIndex !== -1) {
-                    // Significa que algo foi pulado/apagado no texto formatado
                     let suprimido = t1.substring(i, syncIndex);
                     erros.push({ pos: i, suprimido: suprimido });
-                    i = syncIndex; // Pula o 'i' para onde eles voltaram a ser iguais
+                    i = syncIndex; 
                 } else {
-                    // Se não encontrou a âncora, pode ser que algo foi INSERIDO no formatado por engano.
-                    // Avançamos o 'j' para tentar ressincronizar (evita travamentos)
                     let ancoraOriginal = t1.substr(i, 12);
                     let syncIndexT2 = t2.indexOf(ancoraOriginal, j);
-                    
                     if (syncIndexT2 !== -1) {
-                        j = syncIndexT2; // Ignora o que foi inserido e continua
+                        j = syncIndexT2; 
                     } else {
-                        // Desincronização total, força avanço
-                        erros.push({ pos: i, suprimido: "Erro complexo de leitura a partir deste ponto." });
+                        erros.push({ pos: i, suprimido: "Erro complexo de dessincronização." });
                         break;
                     }
                 }
             }
         }
 
-        // Se sobrou texto original que não foi lido, ele foi apagado no final
         if (i < t1.length && j === t2.length) {
             erros.push({ pos: i, suprimido: t1.substring(i) });
         }
@@ -260,24 +246,98 @@
         renderizarErros(t1, t2, erros, divRes);
     }
 
+    // === NOVA FUNÇÃO DO GPS JURÍDICO ===
+    function obterContextoHierarquico(textoAteErro) {
+        const regex = /(?:^|\s)(Art\.\s*\d+[a-z]*|§\s*\d+(?:º|°|o)?|Parágrafo\s+único|[IVXLCDM]+\s*-|[a-z]\)|Pena(?:s)?\s*[-:])/gi;
+        
+        let currentArt = "";
+        let currentPar = "";
+        let currentInc = "";
+        let currentAli = "";
+        let currentPena = "";
+
+        // Palavras que indicam que o marcador é apenas uma citação/remissão no meio da frase
+        const stopWords = ['do', 'da', 'dos', 'das', 'no', 'na', 'nos', 'nas', 'ao', 'aos', 'à', 'às', 'o', 'os', 'a', 'as', 'e', 'ou', 'art', 'arts', 'lei', 'inciso', 'incisos', 'alínea', 'alíneas', 'caput', 'sob', 'conforme', 'termos', 'parágrafo', 'parágrafos', 'em'];
+
+        let match;
+        while ((match = regex.exec(textoAteErro)) !== null) {
+            let marker = match[1].trim();
+            let markerIndex = match.index;
+
+            // Extrai as 25 letras ANTES do marcador para análise de contexto
+            let startIndex = Math.max(0, markerIndex - 25);
+            let contextBefore = textoAteErro.substring(startIndex, markerIndex).toLowerCase().trim();
+
+            let isCrossReference = false;
+            
+            // Se o contexto imediatamente anterior termina com vírgula, é citação (ex: art. 11, § 1º)
+            if (contextBefore.endsWith(',')) {
+                isCrossReference = true;
+            } else {
+                // Pega a última palavra solta antes do marcador
+                let tokens = contextBefore.split(/\s+/);
+                let lastWord = tokens[tokens.length - 1];
+                let lastWordClean = lastWord ? lastWord.replace(/[.,;:]/g, '') : ''; // Limpa pontuações
+                
+                // Verifica se a palavra está na lista de proibições
+                if (stopWords.includes(lastWordClean)) {
+                    isCrossReference = true;
+                }
+            }
+
+            // Ignora o marcador e vai para o próximo se for citação
+            if (isCrossReference) continue;
+
+            // --- Lógica de Hierarquia (Matrioska) ---
+            let upperMarker = marker.toUpperCase();
+            
+            // Padroniza a primeira letra maiúscula para a exibição ficar bonita
+            marker = marker.charAt(0).toUpperCase() + marker.slice(1);
+
+            if (upperMarker.startsWith("ART")) {
+                currentArt = marker;
+                // Ao entrar num novo Artigo, zera tudo que vem abaixo dele
+                currentPar = currentInc = currentAli = currentPena = "";
+            } else if (upperMarker.startsWith("§") || upperMarker.startsWith("PARÁGRAFO")) {
+                currentPar = marker;
+                // Ao entrar num novo Parágrafo, zera incisos e alíneas
+                currentInc = currentAli = currentPena = "";
+            } else if (upperMarker.startsWith("PENA")) {
+                currentPena = marker;
+                currentInc = currentAli = "";
+            } else if (/^[A-Z]\)$/i.test(marker)) { // Letra com parêntese
+                currentAli = marker;
+            } else if (/^[IVXLCDM]+\s*-/i.test(marker)) { // Algarismo Romano com Hífen
+                currentInc = marker;
+                currentAli = "";
+            }
+        }
+
+        // Constrói o caminho ("Migalha de pão")
+        let breadcrumb = [];
+        if (currentArt) breadcrumb.push(currentArt);
+        if (currentPar) breadcrumb.push(currentPar);
+        if (currentPena) breadcrumb.push(currentPena);
+        if (currentInc) breadcrumb.push(currentInc);
+        if (currentAli) breadcrumb.push(currentAli);
+
+        if (breadcrumb.length === 0) {
+            return "Antes do primeiro artigo (Preâmbulo)";
+        }
+        
+        return breadcrumb.join(" <span style='color:#bdc3c7'>🡒</span> ");
+    }
+
     function renderizarErros(t1, t2, erros, divRes) {
         let html = `<h3 style="color: #e74c3c; margin-top: 0;">❌ Divergências Encontradas</h3>`;
         html += `<p><strong>Caracteres (Original):</strong> ${t1.length} | <strong>Caracteres (Formatado):</strong> ${t2.length}</p>`;
 
-        // Regex para capturar a localização (Artigos, Incisos, Parágrafos, Alíneas e Penas)
-        const regexMarcadores = /(?:^|\s)(Art\.\s*\d+[a-z]*|§\s*\d+(?:º|°|o)?|Parágrafo\s+único|[IVXLCDM]+\s*-|[a-z]\)|Pena(?:s)?\s*[-:])/gi;
-
-        erros.forEach((err, index) => {
-            // Localiza o contexto buscando para trás a partir do erro
-            let contextoLocal = "Antes do primeiro artigo";
+        erros.forEach((err) => {
             let textoAteErro = t1.substring(0, err.pos);
             
-            let matches = [...textoAteErro.matchAll(regexMarcadores)];
-            if (matches.length > 0) {
-                contextoLocal = matches[matches.length - 1][1]; // Pega o último marcador encontrado
-            }
+            // CHAMA O NOVO GPS JURÍDICO
+            let contextoLocal = obterContextoHierarquico(textoAteErro);
 
-            // Cria um "snippet" (um pedaço do texto antes e depois) para mostrar ao usuário onde está o erro
             let inicioSnippet = Math.max(0, err.pos - 40);
             let fimSnippet = Math.min(t1.length, err.pos + err.suprimido.length + 40);
             
@@ -286,7 +346,7 @@
 
             html += `
                 <div class="error-card">
-                    <p style="margin: 0 0 5px 0;"><strong>Localização:</strong> <span style="color: #e67e22;">${contextoLocal}</span></p>
+                    <p style="margin: 0 0 5px 0;"><strong>Localização:</strong> <span style="color: #e67e22; font-weight: bold;">${contextoLocal}</span></p>
                     <p style="margin: 0 0 10px 0;"><strong>Suprimido:</strong> "${err.suprimido}"</p>
                     <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-style: italic; color: #555;">
                         "...${trechoAntes}<span class="highlight-missing">${err.suprimido}</span>${trechoDepois}..."
