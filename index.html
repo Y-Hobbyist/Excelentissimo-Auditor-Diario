@@ -115,10 +115,11 @@
             color: #333; 
         }
         
-        /* Estilos baseados no tipo de erro (🔴 Todos Vermelhos agora) */
+        /* Estilos baseados no tipo de erro (Cores de Alerta e Perigo) */
         .card-supressao { border-left: 5px solid #e74c3c; } /* Vermelho escuro */
         .card-insercao { border-left: 5px solid #ff4444; } /* Vermelho mais vivo */
-        .card-dessinc { border-left: 5px solid #f39c12; }
+        .card-alteracao { border-left: 5px solid #d35400; } /* Laranja escuro / Abóbora */
+        .card-dessinc { border-left: 5px solid #f1c40f; } /* Amarelo (Erro grave) */
 
         /* Estilo para Supressão: Vermelho, Riscado */
         .highlight-missing {
@@ -131,9 +132,26 @@
         }
         /* Estilo para Inserção: Vermelho, Sublinhado */
         .highlight-added {
-            background-color: #ffebee; /* Fundo rosa bem claro */
-            color: #d32f2f; /* Texto vermelho */
-            text-decoration: underline; /* Sublinhado */
+            background-color: #ffebee; 
+            color: #d32f2f; 
+            text-decoration: underline; 
+            padding: 0 3px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        /* Estilos para Alteração: Laranja escuro, alertando sobre a modificação */
+        .highlight-alt-old {
+            background-color: #fdebd0;
+            color: #d35400;
+            text-decoration: line-through;
+            padding: 0 3px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        .highlight-alt-new {
+            background-color: #fdf2e9;
+            color: #e67e22;
+            text-decoration: underline;
             padding: 0 3px;
             border-radius: 3px;
             font-weight: bold;
@@ -151,9 +169,12 @@
         /* Ajuste das bordas e destaques no tema escuro para ficarem visíveis */
         body.dark-mode .card-supressao { border-left-color: #ff5252; }
         body.dark-mode .card-insercao { border-left-color: #ff8a80; }
+        body.dark-mode .card-alteracao { border-left-color: #e67e22; }
         
         body.dark-mode .highlight-missing { background-color: #5c1919; color: #ffab91; }
         body.dark-mode .highlight-added { background-color: #421414; color: #ff8a80; }
+        body.dark-mode .highlight-alt-old { background-color: #6e2c00; color: #edbb99; }
+        body.dark-mode .highlight-alt-new { background-color: #873600; color: #f5b041; }
     </style>
 </head>
 <body>
@@ -162,7 +183,7 @@
     <button class="btn-theme" id="themeToggle" onclick="alternarTema()" title="Alternar Tema Escuro">🌙</button>
 
     <h1>🔎 Auditor de Textos Legais</h1>
-    <p class="subtitle">Compare o texto original do PDF com a versão formatada para detectar supressões ou inserções indevidas.</p>
+    <p class="subtitle">Compare o texto original do PDF com a versão formatada para detectar supressões, inserções ou alterações indevidas.</p>
 
     <div class="grid">
         <div>
@@ -223,13 +244,13 @@
         let t1 = original.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
         let t2 = formatado.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
         let t1SemEspacos = t1.replace(/\s/g, '').length;
-        let t2SemEspacos = t2.replace(/\s/g, '').length;
+        let t2SemEspacos = t2.replace(/\s/g, '').length;
 
         divRes.style.display = 'block';
 
         if (t1 === t2) {
             divRes.innerHTML = `<h3 style="color: #27ae60; margin: 0;">✅ Verificação Concluída: Os textos são idênticos!</h3>
-                                <p>Nenhuma letra foi suprimida ou adicionada.</p>
+                                <p>Nenhuma letra foi suprimida, inserida ou alterada.</p>
                                 <p><strong>Caracteres (Original):</strong> ${t1.length} com espaços | ${t1SemEspacos} sem espaços</p>
                                 <p><strong>Caracteres (Formatado):</strong> ${t2.length} com espaços | ${t2SemEspacos} sem espaços</p>`;
             return;
@@ -242,34 +263,47 @@
             if (t1[i] === t2[j]) {
                 i++; j++;
             } else {
-                let ancoraT2 = t2.substr(j, 15); 
-                let ancoraT1 = t1.substr(i, 15);
+                // Algoritmo de Janela Deslizante (Sliding Window) para detectar e contornar diferenças
+                let matchLength = 10; 
+                let maxWindow = 300; 
+                let bestT1Jump = -1;
+                let bestT2Jump = -1;
 
-                if (ancoraT2.length < 5 || ancoraT1.length < 5) { 
-                    if (i < t1.length) erros.push({ tipo: 'supressao', pos: i, texto: t1.substring(i) });
-                    if (j < t2.length) erros.push({ tipo: 'insercao', pos: i, texto: t2.substring(j) });
-                    break;
+                for (let offset = 0; offset < maxWindow; offset++) {
+                    for (let d1 = 0; d1 <= offset; d1++) {
+                        let d2 = offset - d1;
+                        if (i + d1 + matchLength <= t1.length && j + d2 + matchLength <= t2.length) {
+                            if (t1.substr(i + d1, matchLength) === t2.substr(j + d2, matchLength)) {
+                                bestT1Jump = d1;
+                                bestT2Jump = d2;
+                                break;
+                            }
+                        }
+                    }
+                    if (bestT1Jump !== -1) break;
                 }
 
-                let jumpT1 = t1.indexOf(ancoraT2, i);
-                let jumpT2 = t2.indexOf(ancoraT1, j);
-
-                if (jumpT1 !== -1 && jumpT2 !== -1) {
-                    if ((jumpT1 - i) <= (jumpT2 - j)) {
-                        erros.push({ tipo: 'supressao', pos: i, texto: t1.substring(i, jumpT1) });
-                        i = jumpT1;
-                    } else {
-                        erros.push({ tipo: 'insercao', pos: i, texto: t2.substring(j, jumpT2) });
-                        j = jumpT2;
+                if (bestT1Jump !== -1) {
+                    if (bestT1Jump > 0 && bestT2Jump > 0) {
+                        // Andou nos dois textos = Substituição (Alteração)
+                        erros.push({ 
+                            tipo: 'alteracao', 
+                            pos: i, 
+                            texto: t1.substring(i, i + bestT1Jump), 
+                            textoNovo: t2.substring(j, j + bestT2Jump) 
+                        });
+                    } else if (bestT1Jump > 0) {
+                        // Andou só no original = Apagou algo (Supressão)
+                        erros.push({ tipo: 'supressao', pos: i, texto: t1.substring(i, i + bestT1Jump) });
+                    } else if (bestT2Jump > 0) {
+                        // Andou só no formatado = Inseriu algo (Inserção)
+                        erros.push({ tipo: 'insercao', pos: i, texto: t2.substring(j, j + bestT2Jump) });
                     }
-                } else if (jumpT1 !== -1) {
-                    erros.push({ tipo: 'supressao', pos: i, texto: t1.substring(i, jumpT1) });
-                    i = jumpT1;
-                } else if (jumpT2 !== -1) {
-                    erros.push({ tipo: 'insercao', pos: i, texto: t2.substring(j, jumpT2) });
-                    j = jumpT2;
+                    
+                    i += bestT1Jump; 
+                    j += bestT2Jump;
                 } else {
-                    erros.push({ tipo: 'dessinc', pos: i, texto: "Erro complexo: Os textos divergiram totalmente a partir deste ponto." });
+                    erros.push({ tipo: 'dessinc', pos: i, texto: "Desalinhamento grave detectado neste ponto." });
                     break;
                 }
             }
@@ -348,42 +382,52 @@
 
     function renderizarErros(t1, t2, erros, divRes) {
         let t1SemEspacos = t1.replace(/\s/g, '').length;
-        let t2SemEspacos = t2.replace(/\s/g, '').length;
+        let t2SemEspacos = t2.replace(/\s/g, '').length;
         let html = `<h3 style="color: #e74c3c; margin-top: 0;">❌ Divergências Encontradas</h3>`;
         html += `<p><strong>Caracteres (Original):</strong> ${t1.length} com espaços | ${t1SemEspacos} sem espaços</p>`;
-        html += `<p><strong>Caracteres (Formatado):</strong> ${t2.length} com espaços | ${t2SemEspacos} sem espaços</p>`;
+        html += `<p><strong>Caracteres (Formatado):</strong> ${t2.length} com espaços | ${t2SemEspacos} sem espaços</p>`;
         
         erros.forEach((err) => {
             let textoAteErro = t1.substring(0, err.pos);
             let contextoLocal = obterContextoHierarquico(textoAteErro);
 
+            // Ajuste do tamanho da supressão/alteração no texto 1
+            let lenOld = (err.tipo === 'supressao' || err.tipo === 'alteracao') ? err.texto.length : 0;
+            
             let inicioSnippet = Math.max(0, err.pos - 80);
-            let fimSnippet = Math.min(t1.length, err.pos + (err.tipo === 'supressao' ? err.texto.length : 0) + 80);
+            let fimSnippet = Math.min(t1.length, err.pos + lenOld + 80);
             
             let trechoAntes = t1.substring(inicioSnippet, err.pos);
-            let trechoDepois = t1.substring(err.pos + (err.tipo === 'supressao' ? err.texto.length : 0), fimSnippet);
+            let trechoDepois = t1.substring(err.pos + lenOld, fimSnippet);
 
-            let classeCard, tituloProblema, destaqueHTML;
+            let classeCard, tituloProblema, destaqueHTML, textoDetalhe;
             
-            if (err.tipo === 'supressao') {
+            if (err.tipo === 'alteracao') {
+                classeCard = 'card-alteracao';
+                tituloProblema = 'Alteração (Substituído)';
+                textoDetalhe = `"${err.texto}" 🡒 "${err.textoNovo}"`;
+                destaqueHTML = `<span class="highlight-alt-old">${err.texto}</span> <span style="color: #d35400; font-weight: bold; margin: 0 5px;">🡒</span> <span class="highlight-alt-new">${err.textoNovo}</span>`;
+            } else if (err.tipo === 'supressao') {
                 classeCard = 'card-supressao';
                 tituloProblema = 'Supressão (Apagado)';
+                textoDetalhe = `"${err.texto}"`;
                 destaqueHTML = `<span class="highlight-missing">${err.texto}</span>`;
             } else if (err.tipo === 'insercao') {
                 classeCard = 'card-insercao';
                 tituloProblema = 'Inserção (Adicionado a mais)';
-                // Usa a classe .highlight-added (que agora é vermelha e sublinhada)
+                textoDetalhe = `"${err.texto}"`;
                 destaqueHTML = `<span class="highlight-added">${err.texto}</span>`;
             } else {
                 classeCard = 'card-dessinc';
                 tituloProblema = 'Aviso de Dessincronização';
+                textoDetalhe = `"${err.texto}"`;
                 destaqueHTML = `<span style="background: yellow; color: black; font-weight: bold;">[${err.texto}]</span>`;
             }
 
             html += `
                 <div class="error-card ${classeCard}">
                     <p style="margin: 0 0 5px 0;"><strong>Localização:</strong> <span style="color: #e67e22; font-weight: bold;">${contextoLocal}</span></p>
-                    <p style="margin: 0 0 10px 0;"><strong>${tituloProblema}:</strong> "${err.texto}"</p>
+                    <p style="margin: 0 0 10px 0;"><strong>${tituloProblema}:</strong> ${textoDetalhe}</p>
                     <div style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-style: italic; color: #555;">
                         "...${trechoAntes}${destaqueHTML}${trechoDepois}..."
                     </div>
