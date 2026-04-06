@@ -226,7 +226,9 @@
         divRes.style.display = 'block';
 
         if (t1 === t2) {
-            divRes.innerHTML = '<h3 style="color: #27ae60; margin: 0;">✅ Verificação Concluída: Os textos são idênticos!</h3><p>Nenhuma letra foi suprimida ou adicionada.</p>';
+            divRes.innerHTML = `<h3 style="color: #27ae60; margin: 0;">✅ Verificação Concluída: Os textos são idênticos!</h3>
+                                <p>Nenhuma letra foi suprimida ou adicionada.</p>
+                                <p><strong>Caracteres (Original):</strong> ${t1.length} | <strong>Caracteres (Formatado):</strong> ${t2.length}</p>`;
             return;
         }
 
