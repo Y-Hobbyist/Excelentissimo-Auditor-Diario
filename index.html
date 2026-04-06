@@ -348,8 +348,9 @@
 
     function renderizarErros(t1, t2, erros, divRes) {
         let html = `<h3 style="color: #e74c3c; margin-top: 0;">❌ Divergências Encontradas</h3>`;
-        html += `<p><strong>Original:</strong> ${t1.length} caracteres (${t1SemEspacos} sem espaços)</p>` <br> <p><strong>Formatado:</strong> ${t2.length} caracteres (${t2SemEspacos} sem espaços)</p>`;
-
+        html += `<p><strong>Caracteres (Original):</strong> ${t1.length} com espaços | ${t1SemEspacos} sem espaços</p>`;
+        html += `<p><strong>Caracteres (Formatado):</strong> ${t2.length} com espaços | ${t2SemEspacos} sem espaços</p>`;
+        
         erros.forEach((err) => {
             let textoAteErro = t1.substring(0, err.pos);
             let contextoLocal = obterContextoHierarquico(textoAteErro);
