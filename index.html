@@ -319,7 +319,7 @@
     }
 
     function obterContextoHierarquico(textoAteErro) {
-        const regex = /(?:^|\s)(Art\.\s*\d+[a-z]*|§\s*\d+(?:º|°|o)?|Parágrafo\s+único|[IVXLCDM]+\s*-|[a-z]\)|Pena(?:s)?\s*[-:])/gi;
+        const regex = /(?:^|[\s"'“”‘’(]+)(Art\.\s*\d+[a-z]*|§\s*\d+(?:º|°|o)?|Parágrafo\s+único|[IVXLCDM]+\s*-|[a-z]\)|Pena(?:s)?\s*[-:])/gi;
         
         let currentArt = "";
         let currentPar = "";
