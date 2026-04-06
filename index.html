@@ -222,13 +222,16 @@
 
         let t1 = original.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
         let t2 = formatado.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+        let t1SemEspacos = t1.replace(/\s/g, '').length;
+        let t2SemEspacos = t2.replace(/\s/g, '').length;
 
         divRes.style.display = 'block';
 
         if (t1 === t2) {
             divRes.innerHTML = `<h3 style="color: #27ae60; margin: 0;">✅ Verificação Concluída: Os textos são idênticos!</h3>
                                 <p>Nenhuma letra foi suprimida ou adicionada.</p>
-                                <p><strong>Caracteres (Original):</strong> ${t1.length} | <strong>Caracteres (Formatado):</strong> ${t2.length}</p>`;
+                                <p><strong>Caracteres (Original):</strong> ${t1.length} com espaços | ${t1SemEspacos} sem espaços</p>
+                                <p><strong>Caracteres (Formatado):</strong> ${t2.length} com espaços | ${t2SemEspacos} sem espaços</p>`;
             return;
         }
 
@@ -345,14 +348,15 @@
 
     function renderizarErros(t1, t2, erros, divRes) {
         let html = `<h3 style="color: #e74c3c; margin-top: 0;">❌ Divergências Encontradas</h3>`;
-        html += `<p><strong>Caracteres (Original):</strong> ${t1.length} | <strong>Caracteres (Formatado):</strong> ${t2.length}</p>`;
+        html += `<p><strong>Original:</strong> ${t1.length} caracteres (${t1SemEspacos} sem espaços)</p>`;
+        html += `<p><strong>Formatado:</strong> ${t2.length} caracteres (${t2SemEspacos} sem espaços)</p>`;
 
         erros.forEach((err) => {
             let textoAteErro = t1.substring(0, err.pos);
             let contextoLocal = obterContextoHierarquico(textoAteErro);
 
-            let inicioSnippet = Math.max(0, err.pos - 40);
-            let fimSnippet = Math.min(t1.length, err.pos + (err.tipo === 'supressao' ? err.texto.length : 0) + 40);
+            let inicioSnippet = Math.max(0, err.pos - 80);
+            let fimSnippet = Math.min(t1.length, err.pos + (err.tipo === 'supressao' ? err.texto.length : 0) + 80);
             
             let trechoAntes = t1.substring(inicioSnippet, err.pos);
             let trechoDepois = t1.substring(err.pos + (err.tipo === 'supressao' ? err.texto.length : 0), fimSnippet);
